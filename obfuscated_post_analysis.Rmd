@@ -1,0 +1,1374 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+```{r setup, echo=FALSE}
+library(tidyverse)
+library(magrittr)
+library(openxlsx)
+library(rio)
+library(ggpubr)
+library(ggsci)
+library(purrr)
+library(pheatmap)
+library(broom)
+select <- dplyr::select
+z_scale <- function(x){
+  (x - mean(x))/sd(x) 
+}
+# Load REDACTED data
+REDACTED <- read.xlsx("REDACTED", sheet = "Sup Table S2", startRow = 2)
+# clean REDACTED REDACTED names
+REDACTED$Name <- stringr::str_replace_all(REDACTED$Name, c("\\(" ="", "\\)" = "", "\\+" = "", "^--" = " ", "^-" = "", "^ " = "", "-" = "", " " = "", "_" =""))
+REDACTED$Name <- tolower(REDACTED$Name)
+REDACTED.pivot <- REDACTED %>% 
+  select(Name,REDACTED,REDACTED,REDACTED,REDACTED,`REDACTED`) %>% 
+  pivot_longer(cols=c("REDACTED","REDACTED","REDACTED","REDACTED","REDACTED"), names_to = "REDACTED.REDACTED", values_to="REDACTED")
+write.csv(x=REDACTED.pivot, file="20201130_REDACTED_pivot.csv", row.names = F)
+```
+
+Make a nested list of REDACTED REDACTEDs and REDACTED.
+```{r}
+setwd("REDACTED")
+REDACTED.REDACTEDs <- list()
+REDACTED.REDACTEDs[["REDACTED"]] <- import_list("Mon Oct 26 00:46:04 2020_REDACTED_output.xlsx", setclass = "tbl")
+REDACTED.REDACTEDs[["REDACTED"]] <- import_list("Mon Oct 26 02:00:45 2020_REDACTED_output.xlsx", setclass = "tbl")
+REDACTED.REDACTEDs[["REDACTED"]] <- import_list("Mon Oct 26 04:47:39 2020_REDACTED_output.xlsx", setclass = "tbl")
+REDACTED.REDACTEDs[["REDACTED"]] <- import_list("Mon Oct 26 03:43:20 2020_REDACTED_output.xlsx", setclass = "tbl")
+REDACTED.REDACTEDs[["REDACTED"]] <- import_list("Mon Oct 26 11:35:02 2020_REDACTED_output.xlsx", setclass = "tbl")
+
+REDACTED.REDACTEDs %<>% map_depth(2, .f = function(x) {colnames(x) <- c("gene","baseMean.24h","L2FC.24h","lfcSE.24h","stat.24h","pvalue.24h","padj.24h",
+                                             "baseMean.48h","L2FC.48h","lfcSE.48h","stat.48h","pvalue.48h","padj.48h",
+                                             "baseMean.72h","L2FC.72h","lfcSE.72h","stat.72h","pvalue.72h","padj.72h"); return(x)})
+```
+
+Genes that are significant in any REDACTED REDACTED, under any REDACTED, at any point in time, at varying significance levels
+```{r}
+genes.sig.05 <- REDACTED.REDACTEDs %>% 
+  map_depth(.depth = 2, .f = function(x) filter(x, padj.24h < 0.05 | padj.48h < 0.05 | padj.72h < 0.05)) %>%
+  map_depth(.depth = 2, "gene") %>% 
+  unlist %>% 
+  as.character %>%
+  unique
+
+genes.sig.01 <- REDACTED.REDACTEDs %>% 
+  map_depth(2, .f = function(x) filter(x, padj.24h < 0.01 | padj.48h < 0.01 | padj.72h < 0.01)) %>%
+  map_depth(2, "gene") %>% 
+  unlist %>% 
+  as.character %>%
+  unique
+
+genes.sig.001 <- REDACTED.REDACTEDs %>% 
+  map_depth(2, .f = function(x) filter(x, padj.24h < 0.001 | padj.48h < 0.001 | padj.72h < 0.001)) %>%
+  map_depth(2, "gene") %>% 
+  unlist %>% 
+  as.character %>%
+  unique
+```
+
+More informative: How often are these genes significant across all REDACTED REDACTEDs / REDACTED/ timepoints?
+```{r}
+gs.05.cts <- REDACTED.REDACTEDs %>% 
+  map_depth(2, .f = function(x) filter(x, padj.24h < 0.05 | padj.48h < 0.05 | padj.72h < 0.05)) %>%
+  map_depth(2, "gene") %>% 
+  unlist %>% 
+  as.factor %>%
+  table() %>%
+  as.data.frame %>%
+  rename(. = "gene", Freq = "freq") %>%
+  arrange(-freq)
+  
+gs.01.cts <- REDACTED.REDACTEDs %>% 
+  map_depth(2, .f = function(x) filter(x, padj.24h < 0.01 | padj.48h < 0.01 | padj.72h < 0.01)) %>%
+  map_depth(2, "gene") %>% 
+  unlist %>% 
+  as.factor %>%
+  table() %>% 
+  as.data.frame %>%
+  rename(. = "gene", Freq = "freq") %>% 
+  arrange(-freq)
+
+gs.001.cts <- REDACTED.REDACTEDs %>% 
+  map_depth(2, .f = function(x) filter(x, padj.24h < 0.001 | padj.48h < 0.001 | padj.72h < 0.001)) %>%
+  map_depth(2, "gene") %>% 
+  unlist %>% 
+  as.factor %>%
+  table %>%
+  as.data.frame %>%
+  rename(. = "gene", Freq = "freq") %>%
+  arrange(-freq)
+
+gs.0001.cts <- REDACTED.REDACTEDs %>% 
+  map_depth(2, .f = function(x) filter(x, padj.24h < 0.0001 | padj.48h < 0.0001 | padj.72h < 0.0001)) %>%
+  map_depth(2, "gene") %>% 
+  unlist %>% 
+  as.factor %>%
+  table %>%
+  as.data.frame %>%
+  rename(. = "gene", Freq = "freq") %>%
+  arrange(-freq)
+```
+
+Plot Results
+```{r}
+gs.05.cts$gene <- as.factor(gs.05.cts$gene)
+plt05 <- ggplot(head(gs.05.cts, 20), aes(x=reorder(gene, -freq), y=freq)) + 
+  geom_col() +
+  theme_pubr() +
+  labs(x=element_blank(),y=element_blank(), title = " padj < 0.05") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  ylim(0,20)
+
+gs.01.cts$gene <- as.factor(gs.01.cts$gene)
+plt01 <- ggplot(head(gs.01.cts, 20), aes(x=reorder(gene, -freq), y=freq)) + 
+  geom_col() +
+  theme_pubr() +
+  labs(x=element_blank(),y=element_blank(), title = "padj < 0.01") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  ylim(0,20)
+
+gs.001.cts$gene <- as.factor(gs.001.cts$gene)
+plt001 <- ggplot(head(gs.001.cts, 20), aes(x=reorder(gene, -freq), y=freq)) + 
+  geom_col() +
+  theme_pubr() +
+  labs(x=element_blank(),y=element_blank(), title = "padj < 0.001") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  ylim(0,20)
+
+gs.0001.cts$gene <- as.factor(gs.0001.cts$gene)
+plt0001 <- ggplot(head(gs.0001.cts, 20), aes(x=reorder(gene, -freq), y=freq)) + 
+  geom_col() +
+  theme_pubr() +
+  labs(x=element_blank(),y=element_blank(), title = "padj < 0.0001") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  ylim(0,20)
+
+arr <- ggarrange(plt05, plt01, plt001, plt0001, ncol = 2, nrow = 2)
+annot <- annotate_figure(arr, bottom = "gene", left="frequency", top="Frequency of Significant Expression")
+```
+
+What if we want to know how it looks per-REDACTED REDACTED
+```{r}
+gs.05.cts.bcl <- REDACTED.REDACTEDs %>% 
+  map_depth(2, .f = function(x) filter(x, padj.24h < 0.05 | padj.48h < 0.05 | padj.72h < 0.05)) %>%
+  map_depth(2, "gene") %>% 
+  map_depth(2, ~ as.data.frame(table(.))) %>%
+  map_depth(1, ~ bind_rows(., .id="REDACTED")) %>%
+  map_depth(1, function(x) rename(x, . = "gene")) %>% 
+  map_depth(1, ~ aggregate(data= ., Freq ~ gene, FUN=sum)) %>%
+  bind_rows(.id="REDACTED.REDACTED")
+
+totals = gs.05.cts.bcl %>% group_by(gene) %>% summarise(across(Freq, sum)) %>% rename(Freq = "total") %>% arrange(-total)
+gs.05.fj <- full_join(gs.05.cts.bcl, totals, by="gene")
+gs.05.fj %<>% filter(total > 5)
+plt05_bcl <- ggplot(gs.05.fj, aes(x=reorder(gene, -total), y = Freq, fill=REDACTED.REDACTED)) + 
+  geom_col() +
+  theme_pubr() +
+  labs(x=element_blank(),y=element_blank(), title = " padj < 0.05, frequency > 5") +
+  theme(axis.text.x = element_text(angle = 70, hjust = 1)) +
+  ylim(0,20)
+
+gs.01.cts.bcl <- REDACTED.REDACTEDs %>% 
+  map_depth(2, .f = function(x) filter(x, padj.24h < 0.01 | padj.48h < 0.01 | padj.72h < 0.01)) %>%
+  map_depth(2, "gene") %>% 
+  map_depth(2, ~ as.data.frame(table(.))) %>%
+  map_depth(1, ~ bind_rows(., .id="REDACTED")) %>%
+  map_depth(1, function(x) rename(x, . = "gene")) %>% 
+  map_depth(1, ~ aggregate(data= ., Freq ~ gene, FUN=sum)) %>%
+  bind_rows(.id="REDACTED.REDACTED")
+
+totals = gs.01.cts.bcl %>% group_by(gene) %>% summarise(across(Freq, sum)) %>% rename(Freq = "total") %>% arrange(-total)
+gs.01.fj <- full_join(gs.01.cts.bcl, totals, by="gene")
+gs.01.fj %<>% filter(total > 3)
+plt01_bcl <- ggplot(gs.01.fj, aes(x=reorder(gene, -total), y = Freq, fill=REDACTED.REDACTED)) + 
+  geom_col() +
+  theme_pubr() +
+  labs(x=element_blank(),y=element_blank(), title = " padj < 0.01, frequency > 4") +
+  theme(axis.text.x = element_text(angle = 70, hjust = 1)) +
+  ylim(0,20)
+
+
+gs.001.cts.bcl <- REDACTED.REDACTEDs %>% 
+  map_depth(2, .f = function(x) filter(x, padj.24h < 0.001 | padj.48h < 0.001 | padj.72h < 0.001)) %>%
+  map_depth(2, "gene") %>% 
+  map_depth(2, ~ as.data.frame(table(.))) %>%
+  map_depth(1, ~ bind_rows(., .id="REDACTED")) %>%
+  map_depth(1, function(x) rename(x, . = "gene")) %>% 
+  map_depth(1, ~ aggregate(data= ., Freq ~ gene, FUN=sum)) %>%
+  bind_rows(.id="REDACTED.REDACTED")
+
+totals = gs.001.cts.bcl %>% group_by(gene) %>% summarise(across(Freq, sum)) %>% rename(Freq = "total") %>% arrange(-total)
+gs.001.fj <- full_join(gs.001.cts.bcl, totals, by="gene")
+gs.001.fj %<>% filter(total > 2)
+plt001_bcl <- ggplot(gs.001.fj, aes(x=reorder(gene, -total), y = Freq, fill=REDACTED.REDACTED)) + 
+  geom_col() +
+  theme_pubr() +
+  labs(x=element_blank(),y=element_blank(), title = " padj < 0.001, frequency > 2") +
+  theme(axis.text.x = element_text(angle = 70, hjust = 1)) +
+  ylim(0,20)
+
+gs.0001.cts.bcl <- REDACTED.REDACTEDs %>% 
+  map_depth(2, .f = function(x) filter(x, padj.24h < 0.0001 | padj.48h < 0.0001 | padj.72h < 0.0001)) %>%
+  map_depth(2, "gene") %>% 
+  map_depth(2, ~ as.data.frame(table(.))) %>%
+  map_depth(1, ~ bind_rows(., .id="REDACTED")) %>%
+  map_depth(1, function(x) rename(x, . = "gene")) %>% 
+  map_depth(1, ~ aggregate(data= ., Freq ~ gene, FUN=sum)) %>%
+  bind_rows(.id="REDACTED.REDACTED")
+
+totals = gs.0001.cts.bcl %>% group_by(gene) %>% summarise(across(Freq, sum)) %>% rename(Freq = "total") %>% arrange(-total)
+gs.0001.fj <- full_join(gs.0001.cts.bcl, totals, by="gene")
+gs.0001.fj %<>% filter(total > 2)
+plt0001_bcl <- ggplot(gs.0001.fj, aes(x=reorder(gene, -total), y = Freq, fill=REDACTED.REDACTED)) + 
+  geom_col() +
+  theme_pubr() +
+  labs(x=element_blank(),y=element_blank(), title = " padj < 0.0001, frequency > 2") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  ylim(0,20)
+
+arr.bcl <- ggarrange(plt05_bcl, plt01_bcl, plt001_bcl, plt0001_bcl, ncol=2, nrow=2, common.legend = T, legend = "right")
+annot.bcl <- annotate_figure(arr.bcl, top = "Frequency of REDACTED REDACTED by REDACTED REDACTED", bottom = "gene", left = "Frequency (count)")
+```
+
+```{r}
+wb <- createWorkbook(title="frequency of REDACTED REDACTED")
+addWorksheet(wb, sheetName = "padj .05")
+writeData(wb, sheet = "padj .05", x = gs.05.fj)
+addWorksheet(wb, sheetName = "padj .01")
+writeData(wb, sheet = "padj .01", x = gs.01.fj)
+addWorksheet(wb, sheetName = "padj .001")
+writeData(wb, sheet = "padj .001", x = gs.001.fj)
+addWorksheet(wb, sheetName = "padj .0001")
+writeData(wb, sheet = "padj .0001", x = gs.0001.fj)
+saveWorkbook(wb, file = "REDACTED")
+
+ggsave("REDACTED", annot.bcl, dev=png(), dpi = 300, height = 10, width = 20)
+```
+
+```{r}
+library(gplots)
+library(reshape2)
+library(broom)
+library(car)
+# Hierarchical clustering of genes significantly expressed at padj < .05
+REDACTED.REDACTEDs.05 <- map_depth(.depth = 2, REDACTED.REDACTEDs, ~ filter(., gene %in% genes.sig.05))
+cl.05.cmbn <- list()
+REDACTED <- names(REDACTED.REDACTEDs.05$REDACTED)
+for(REDACTED in REDACTED){
+  cl.05.cmbn[[REDACTED]] <- map_depth(.depth=1, REDACTED.REDACTEDs.05, REDACTED) %>% bind_rows(.id="REDACTED.REDACTED")
+}
+cl.05.all <- bind_rows(cl.05.cmbn, .id="REDACTED")
+
+
+my_palette <- colorRampPalette(c("blue", "gray", "red"))(n = 299)
+
+cl.05.hmd.24h <- cl.05.all %>% select(REDACTED.REDACTED, REDACTED, gene, L2FC.24h)
+cl.05.hmd.24h <- acast(cl.05.hmd.24h, gene~REDACTED.REDACTED+REDACTED, value.var="L2FC.24h")
+cl.05.hmd.24h[is.na(cl.05.hmd.24h)] = 0
+hm.24h <- heatmap.2(cl.05.hmd.24h, trace = "none", col=my_palette)
+
+cl.05.hmd.48h <- cl.05.all %>% select(REDACTED.REDACTED, REDACTED, gene, L2FC.48h)
+cl.05.hmd.48h <- acast(cl.05.hmd.48h, gene~REDACTED.REDACTED+REDACTED, value.var="L2FC.48h")
+cl.05.hmd.48h[is.na(cl.05.hmd.48h)] = 0
+hm.48h <- heatmap.2(cl.05.hmd.48h, trace = "none", col=my_palette)
+
+cl.05.hmd.72h <- cl.05.all %>% select(REDACTED.REDACTED, REDACTED, gene, L2FC.72h)
+cl.05.hmd.72h <- acast(cl.05.hmd.72h, gene~REDACTED.REDACTED+REDACTED, value.var="L2FC.72h")
+cl.05.hmd.72h[is.na(cl.05.hmd.72h)] = 0
+hm.72h <- heatmap.2(cl.05.hmd.72h, trace = "none", col=my_palette)
+
+
+```
+Expression ANOVAs
+```{r}
+set.seed(20201105)
+library(reshape2)
+library(broom)
+library(car)
+library(cleaner)
+genes.sig.05 <- REDACTED.REDACTEDs %>% 
+  map_depth(2, .f = function(x) filter(x, padj.24h < 0.05 | padj.48h < 0.05 | padj.72h < 0.05)) %>%
+  map_depth(1, .f = ~ bind_rows(., .id="REDACTED"))
+
+sig.genes <- map(genes.sig.05, "gene") %>% unlist %>% as.character()
+
+
+pivot_func <- function(x){
+  x = x %>% pivot_longer(cols=contains("L2FC"), names_to=c("timepoint1","timepoint2"), names_pattern="(.+)\\.(.+)") %>% 
+  pivot_wider(names_from = timepoint1, values_from=value) %>%
+  rename(timepoint2="timepoint")
+}
+
+REDACTED.REDACTEDs.filt <- REDACTED.REDACTEDs %>% map_depth(.depth = 2, ~filter(.,gene %in% sig.genes)) %>%
+  map_depth(.depth = 1, .f = ~ bind_rows(., .id="REDACTED"))
+
+genes.sig.01 <- REDACTED.REDACTEDs %>% 
+  map_depth(2, .f = function(x) filter(x, padj.24h < 0.01 | padj.48h < 0.01 | padj.72h < 0.01)) 
+sig <- map_depth(.depth = 1, .x = REDACTED.REDACTEDs.filt , .f = pivot_func)
+sig %<>% map_depth(.depth = 1, .f = ~ select(., c("REDACTED","gene","timepoint","L2FC")))
+sig$REDACTED$REDACTED <- as.factor(sig$REDACTED$REDACTED)
+sig$REDACTED$gene <- as.factor(sig$REDACTED$gene)
+sig$REDACTED$timepoint <- as.factor(sig$REDACTED$timepoint)
+sig$REDACTED <- sig$REDACTED %>% drop_na()
+test <- sig$REDACTED %>%
+  group_by(gene) %>%
+  do(broom::tidy(aov(formula = as.formula("L2FC ~ REDACTED * timepoint"), data = .)))
+
+
+test = aov(formula = as.formula("L2FC ~ REDACTED * timepoint"), data = sig$REDACTED)
+test_unb <- Anova(test, type = "III")
+
+
+sig_by_gene_REDACTED <- sig$REDACTED %>% group_split(gene) %>% setNames(unique(sig$REDACTED$gene))
+
+aov_out <- list()
+for(i in names(sig_by_gene_REDACTED)){
+  aov_out[[i]] <- aov(formula = as.formula("L2FC ~ REDACTED * timepoint"), data = sig_by_gene_REDACTED[[i]])
+}
+
+# what about when combining REDACTED REDACTEDs
+sig.all <- data.table::rbindlist(sig, idcol = "REDACTED.REDACTED")
+sig.all %<>% group_by(REDACTED, gene, REDACTED.REDACTED) %>% mutate(ind = cur_group_id())
+
+# super inefficient but literally every other attempt failed
+indices <- unique(sig.all$ind)
+rows <- vector("list", length = length(indices))
+for(i in 1:length(indices)){
+  # message("\r ",i, appendLF = FALSE)
+  new_row <- slice_head(sig.all[sig.all$ind==indices[i],])
+  new_row$timepoint = "00h"
+  new_row$L2FC = 0.0
+  rows[[i]] <- new_row
+}
+bound <- data.table::rbindlist(rows)
+sig.all.t0a <- data.table::rbindlist(list(sig.all, bound))
+write.csv(x=sig.all.t0a, file="REDACTED")
+
+sig.all.t0a <- read.csv("REDACTED") %>% select(-X)
+sig.all.t0a$REDACTED <- as.factor(sig.all.t0a$REDACTED)
+sig.all.t0a$gene <- as.factor(sig.all.t0a$gene)
+sig.all.t0a$timepoint <- as.factor(sig.all.t0a$timepoint)
+sig.all.t0a$timepoint <- relevel(sig.all.t0a$timepoint, ref="00h")
+
+aov.all.out.t0a <- sig.all.t0a %>% 
+  group_by(gene) %>% 
+  do(broom::tidy(aov(formula = as.formula("L2FC ~ REDACTED * timepoint"), data = .))) 
+
+aov.all.out.t0a %<>% group_by(term) %>% mutate(padj = p.adjust(p.value, method = "BH"))
+
+grp <- aov.all.out.t0a %>% filter(padj < .01) %>% group_by(gene, term) %>% tally()
+grp %<>% pivot_wider(id_cols = c(gene,term), values_from=n, names_from=gene) %>% column_to_rownames("term")
+grp <- t(grp) %>% as.data.frame() %>% rownames_to_column()
+grp %<>% na_replace()
+write.csv(grp, file="REDACTED", row.names = F)
+
+```
+
+PLS Regression
+```{r}
+library(pls)
+library(caret)
+library(parallel)
+library(cleaner)
+set.seed(20201105)
+
+
+
+# 2148 genes (I can't explain the 5 missing genes)
+sig.all.t0a <- read.csv("20201105_sig.all.t0a.csv")
+grp <- read.csv('20201105_grouped_anova_out.csv')
+goi <- filter(grp, (`REDACTED` == 1 | `REDACTED.timepoint` == 1)) %>% pull(rowname) %>% unique()
+sig.goi <- sig.all.t0a %>% filter(gene %in% goi)
+sig.goi
+# maxAbsFC = the maximum of the absolute value of the z-transformed L2FC values
+# This commented block does the same as the uncommented REDACTED below it, but retains intermediate values
+sig.maxAbs.wi <- sig.goi %>%
+  group_by(REDACTED.REDACTED, REDACTED, gene) %>%
+  mutate(L2FC_abs = abs(L2FC)) %>%
+  mutate(L2FC_max = max(L2FC_abs)) %>% 
+  ungroup %>%
+  group_by(gene) %>%
+  mutate(scaleAbsFC= z_scale(L2FC_max))
+sig.maxAbs.wi$L2FC_scale[is.nan(sig.maxAbs.wi$L2FC_max)] <- 0
+sig.maxAbs.wi$L2FC_abs[is.nan(sig.maxAbs.wi$L2FC_abs)] <- 0
+sig.maxAbs.wi$scaleAbsFC[is.nan(sig.maxAbs.wi$scaleAbsFC)] <- 0
+sig.maxAbs.wi$scaleAbsFC[is.na(sig.maxAbs.wi$scaleAbsFC)] <- 0
+
+sig.maxAbs <- sig.maxAbs.wi %>% select(REDACTED.REDACTED, REDACTED, gene, scaleAbsFC) %>% distinct()
+
+# Load REDACTED data
+REDACTED <- read.xlsx("REDACTED", sheet = "Sup Table S2", startRow = 2)
+# clean REDACTED REDACTED names
+REDACTED$Name <- stringr::str_replace_all(REDACTED$Name, c("\\(" ="", "\\)" = "", "\\+" = "", "^--" = " ", "^-" = "", "^ " = "", "-" = "", " " = "", "_" =""))
+REDACTED$Name <- tolower(REDACTED$Name)
+# have to clean up REDACTED names in sig.maxAbs too
+sig.maxAbs$REDACTED_clean = str_replace_all(sig.maxAbs$REDACTED, c("-" = "", " " = "", "_" = ""))
+sig.maxAbs$REDACTED_clean = tolower(sig.maxAbs$REDACTED_clean)
+sig.maxAbs[which(sig.maxAbs$REDACTED_clean == "ogl002"),]$REDACTED_clean = "ogl002hydrochloride"
+sig.maxAbs[which(sig.maxAbs$REDACTED_clean == "cid11210285"),]$REDACTED_clean = "cid11210285hydrochloride"
+sig.maxAbs[which(sig.maxAbs$REDACTED_clean == "bix01294"),]$REDACTED_clean = "bix01294trihydrochloridehydrate"
+sig.maxAbs[which(sig.maxAbs$REDACTED_clean == "3deazaneplanocinahydrochl..."),]$REDACTED_clean = "3deazaneplanocinahydrochloride"
+
+REDACTED.pivot <- REDACTED %>% 
+  select(Name,REDACTED,REDACTED,REDACTED,REDACTED,`REDACTED`) %>% 
+  pivot_longer(cols=c("REDACTED","REDACTED","REDACTED","REDACTED","REDACTED"), names_to = "REDACTED.REDACTED", values_to="REDACTED")
+pls.dat <- merge(sig.maxAbs, REDACTED.pivot, by.x=c("REDACTED.REDACTED","REDACTED_clean"), by.y=c("REDACTED.REDACTED","Name"))
+pls.pred <- pivot_wider(pls.dat, id_cols = c(REDACTED.REDACTED,gene,REDACTED_clean), names_from = gene, values_from = c(scaleAbsFC))
+pls.pred <- merge(pls.pred, REDACTED.pivot, by.x=c("REDACTED.REDACTED","REDACTED_clean"), by.y=c("REDACTED.REDACTED","Name"))
+pls.pred.blind <- pls.pred %>% select(-REDACTED.REDACTED, -REDACTED_clean)
+pls.train.ind <- createDataPartition(1:nrow(pls.pred.blind), times = 1, p=0.6, list=FALSE)
+train.dat <- pls.pred.blind[pls.train.ind,]
+test.dat <- pls.pred.blind[-pls.train.ind,]
+
+reg <- plsr(REDACTED ~ . , data = train.dat, validation="LOO")
+fit.resid <- cbind(reg$fitted.values, reg$residuals)
+
+res_pred = predict(reg, ncomp =4, data=test.dat)
+
+reg.4 <- plsr(REDACTED ~ . , data = pls.pred.blind, validation="LOO", ncomp=4, jackknife=TRUE)
+res.jt <- jack.test(reg.4, ncomp=4)
+
+res.jt.df <- cbind(res.jt$coefficients, res.jt$sd, res.jt$tvalues, res.jt$pvalues)
+colnames(res.jt.df) <- c("coeff","Sd", "tvalue","pvalue")
+rownames(res.jt.df) <- rownames(res.jt$coefficients)
+res.jt.df <- as.data.frame(res.jt.df)
+res.jt.df <- res.jt.df %>% rownames_to_column(var="gene")
+res.jt.df <- res.jt.df %>% mutate(padj = p.adjust(res.jt$pvalue, method = "BH"))
+res.jt.df %<>% mutate(abs.snr = abs(coeff / Sd))
+
+
+res.vj <- var.jack(reg.4, ncomp=4) 
+res.vj.df <- as.data.frame(res.vj)
+colnames(res.vj.df) <- c("var.est")
+rownames(res.vj.df) <- rownames(res.vj)
+res.vj.df %<>% rownames_to_column()
+res.vj.df %<>% mutate(std.err = sqrt(var.est))
+#res.vj.df %<>% mutate(snr =  coeff/ std.err)
+
+res.vj.cv <- var.jack(reg.4, ncomp=4, covariance = T)
+
+# according to the source code, the standard error whiskers in the plot
+# are just the square root of the output of var.jack, which returns
+# variance estimates of a jackknifed pls regression
+# Which is just equal to the standard deviation
+
+#coeff <- reg.4$validation$coefficients
+#residuals <- reg.4$residuals
+#se <- coeff_se(coeff)
+
+coefplot(reg.4, ncomp=4, se.whiskers = T, main = "Regression Coefficients of 2153 genes, ncomp = 4")
+
+snr.dat <- res.jt.df %>% filter(abs.snr > 2)
+snrplt <- ggplot(data=res.jt.df, aes(x=abs.snr)) +
+  geom_histogram() +
+  lims(x=c(0,5)) +
+  theme_pubclean() +
+  ggtitle("Distribution of signal-to-noise ratio")
+
+```
+
+Second PLS Regression
+```{r}
+reg.dat.2 <- sig.maxAbs.wi %>% 
+  filter(gene %in% snr.dat$gene) %>%
+  select(REDACTED.REDACTED, REDACTED, gene, timepoint, L2FC) %>%
+  group_by(gene) %>%
+  mutate(scaleFC= z_scale(L2FC))
+ 
+reg.dat.2$REDACTED_clean = str_replace_all(reg.dat.2$REDACTED, c("-" = "", " " = "", "_" = ""))
+reg.dat.2$REDACTED_clean = tolower(reg.dat.2$REDACTED_clean)
+reg.dat.2[which(reg.dat.2$REDACTED_clean == "REDACTED"),]$REDACTED_clean = "REDACTED"
+reg.dat.2[which(reg.dat.2$REDACTED_clean == "REDACTED"),]$REDACTED_clean = "REDACTED"
+reg.dat.2[which(reg.dat.2$REDACTED_clean == "REDACTED"),]$REDACTED_clean = "REDACTED"
+reg.dat.2[which(reg.dat.2$REDACTED_clean == "REDACTED"),]$REDACTED_clean = "REDACTED"
+reg.dat.2$REDACTED <- reg.dat.2$REDACTED_clean
+reg.dat.2.piv <- pivot_wider(reg.dat.2, id_cols = c("REDACTED.REDACTED","REDACTED_clean"), names_from = c("gene","REDACTED"), values_from = "scaleFC")
+reg.dat.2.piv <- merge(reg.dat.2.piv, REDACTED.pivot, by.x=c("REDACTED.REDACTED","REDACTED_clean"), by.y=c("REDACTED.REDACTED","Name"))
+
+reg.dat.2.blind <- reg.dat.2.piv %>% select(-REDACTED.REDACTED, -REDACTED_clean)
+pls.reg.2 <- plsr(REDACTED ~ . , data = reg.dat.2.blind, validation="LOO")
+pls.reg.2.6comp <- plsr(REDACTED ~ . , data = reg.dat.2.blind, validation="LOO", ncomp=6, jackknife=TRUE)
+
+
+res.2.jt <- jack.test(pls.reg.2.6comp, ncomp=6)
+
+res.2.jt.df <- cbind(res.2.jt$coefficients, res.2.jt$sd, res.2.jt$tvalues, res.2.jt$pvalues)
+colnames(res.2.jt.df) <- c("coeff","Sd", "tvalue","pvalue")
+rownames(res.2.jt.df) <- rownames(res.2.jt$coefficients)
+res.2.jt.df <- as.data.frame(res.2.jt.df)
+res.2.jt.df <- res.2.jt.df %>% rownames_to_column(var="gene")
+res.2.jt.df <- res.2.jt.df %>% mutate(padj = p.adjust(res.2.jt$pvalue, method = "BH"))
+res.2.jt.df %<>% mutate(abs.snr = abs(coeff / Sd))
+
+snrplt.2 <- ggplot(data=res.2.jt.df, aes(x=abs.snr)) +
+  geom_histogram() +
+  lims(x=c(0,5)) +
+  theme_pubclean() +
+  ggtitle("Distribution of signal-to-noise ratio")
+
+
+res.2.8comp.covar <- var.jack(pls.reg.2.6comp, ncomp=6, covariance = T)
+
+loadingplot(pls.reg.2.6comp, comps = 1:6, scatter = T, identify = F)
+
+biplot(pls.reg.2.6comp, comps=c(1,3))
+
+```   
+
+Heatmaps
+```{r}
+reg.2.genes <- res.2.jt.df %>% filter(abs.snr > 2) %>% separate(gene, into=c("gene","timepoint")) %>% pull(gene)
+
+hm.dat <- reg.dat.2 %>% filter(gene %in% reg.2.genes, timepoint != "00h")
+
+# encode dummy REDACTED data
+all.REDACTED <- hm.dat$REDACTED %>% unique
+cl.names <- names(REDACTED.REDACTEDs)
+genes <- hm.dat$gene %>% unique
+for(i in cl.names){
+  REDACTED <- hm.dat %>% filter(REDACTED.REDACTED == i) %>% pull(REDACTED) %>% unique
+  diff <- setdiff(all.REDACTED, REDACTED)
+  for(j in diff){
+    for(g in genes){
+      hm.dat <- rbind(hm.dat, c(REDACTED.REDACTED = i, REDACTED = j, gene = g, timepoint = "24h", L2FC = numeric(0), scaleFC = numeric(0)))
+      hm.dat <- rbind(hm.dat, c(REDACTED.REDACTED = i, REDACTED = j,  gene = g, timepoint = "48h", L2FC = numeric(0), scaleFC = numeric(0)))
+      hm.dat <- rbind(hm.dat, c(REDACTED.REDACTED = i, REDACTED = j,  gene = g, timepoint = "72h", L2FC = numeric(0), scaleFC = numeric(0)))
+    }
+  
+  }
+}
+hm.dat <- hm.dat %>% arrange(REDACTED.REDACTED, REDACTED, timepoint, gene)
+
+na_col = "grey"
+hm.dat.filt <- hm.dat %>% 
+  mutate(group = paste0(REDACTED.REDACTED,"_",REDACTED,"_",timepoint)) %>% select(gene, group, scaleFC) %>%
+  pivot_wider(id_cols=c(group,gene), values_from=scaleFC, names_from=gene) %>% column_to_rownames('group') 
+hm <- pheatmap(hm.dat.filt, cluster_rows = F, color=colorRampPalette(c("navy", "white", "firebrick3"))(50))
+
+breaksList = seq(-9, 6, by = 0.1)
+hm.REDACTED.dat <- hm.dat %>% filter(REDACTED.REDACTED == "REDACTED")
+hm.REDACTED.dat.filt <- hm.REDACTED.dat %>% 
+  mutate(group = paste0(REDACTED,"_",timepoint)) %>% select(gene, group, scaleFC) %>%
+  pivot_wider(id_cols=c(group,gene), values_from=scaleFC, names_from=gene) %>% column_to_rownames('group') 
+hm.REDACTED <- pheatmap(hm.REDACTED.dat.filt, 
+                    cluster_rows = F, 
+                    color=colorRampPalette(c("navy", "white", "firebrick3"))(length(breaksList)), 
+                    breaks = breaksList, main="REDACTED", 
+                    na_col = na_col) 
+
+hm.REDACTED.dat <- hm.dat %>% filter(REDACTED.REDACTED == "REDACTED")
+hm.REDACTED.dat.filt <- hm.REDACTED.dat %>% 
+  mutate(group = paste0(REDACTED,"_",timepoint)) %>% 
+  select(gene, group, scaleFC) %>%
+  pivot_wider(id_cols=c(group,gene), values_from=scaleFC, names_from=gene) %>% 
+  column_to_rownames('group') 
+hm.REDACTED <- pheatmap(hm.REDACTED.dat.filt, cluster_rows = F, color=colorRampPalette(c("navy", "white", "firebrick3"))(length(breaksList)), breaks = breaksList, main="REDACTED", na_col = na_col)
+
+hm.REDACTED.dat <- hm.dat %>% filter(REDACTED.REDACTED == "REDACTED")
+hm.REDACTED.dat.filt <- hm.REDACTED.dat %>% 
+  mutate(group = paste0(REDACTED,"_",timepoint)) %>% 
+  select(gene, group, scaleFC) %>%
+  pivot_wider(id_cols=c(group,gene), values_from=scaleFC, names_from=gene) %>% 
+  column_to_rownames('group') 
+hm.REDACTED <- pheatmap(hm.REDACTED.dat.filt, cluster_rows = F, color=colorRampPalette(c("navy", "white", "firebrick3"))(length(breaksList)), breaks = breaksList, main="REDACTED", na_col = na_col) 
+
+hm.REDACTED.dat <- hm.dat %>% filter(REDACTED.REDACTED == "REDACTED")
+hm.REDACTED.dat.filt <- hm.REDACTED.dat %>% 
+  mutate(group = paste0(REDACTED,"_",timepoint)) %>% 
+  select(gene, group, scaleFC) %>%
+  pivot_wider(id_cols=c(group,gene), values_from=scaleFC, names_from=gene) %>% 
+  column_to_rownames('group') 
+hm.REDACTED <- pheatmap(hm.REDACTED.dat.filt, cluster_rows = F, color=colorRampPalette(c("navy", "white", "firebrick3"))(length(breaksList)), breaks = breaksList, main="REDACTED", na_col = na_col)
+
+hm.REDACTED.dat <- hm.dat %>% filter(REDACTED.REDACTED == "REDACTED")
+hm.REDACTED.dat.filt <- hm.REDACTED.dat %>% 
+  mutate(group = paste0(REDACTED,"_",timepoint)) %>% 
+  select(gene, group, scaleFC) %>%
+  pivot_wider(id_cols=c(group,gene), values_from=scaleFC, names_from=gene) %>% 
+  column_to_rownames('group') 
+hm.REDACTED <- pheatmap(hm.REDACTED.dat.filt, cluster_rows = F, color=colorRampPalette(c("navy", "white", "firebrick3"))(length(breaksList)), breaks = breaksList, main="REDACTED", na_col = na_col)
+
+```
+
+Mutual Information Network
+```{r}
+library(minet)
+library(Rgraphviz)
+# REDACTED as a node
+# Z-scaled FC 
+# gene-time pairs as nodes (+ REDACTED)
+# build mim for each 
+# start with across all REDACTED REDACTEDs, then try individual
+# export to cytoscape and spring0
+
+# bootstrap mim and find mean and std error
+# pick out those with less than twice
+# random sample of half (sets of 50) do 100 times
+
+set.seed(20201105)
+reg.2.genes <- res.2.jt.df %>% filter(abs.snr > 2) %>% pull(gene)
+
+
+mim.dat <- reg.dat.2.piv %>% select(contains(c(reg.2.genes,"REDACTED")))
+
+tc <- caret::createDataPartition(1:nrow(mim.dat), times = 100, p = 0.5, list = T)
+
+mim.list <- list()
+for(i in 1:100){
+  mim.list[[i]] <- build.mim(mim.dat[tc[[i]],])
+}
+
+mim.list.df <- mim.list %>% map(.f = ~ rownames_to_column(as.data.frame(.)))
+mim.all <- data.table::rbindlist(mim.list.df, idcol = "rep")
+mim.long <- pivot_longer(data=mim.all, cols = contains(c(reg.2.genes, "REDACTED"))) %>% filter(value > 0.05)
+mim.summary <- mim.long %>% group_by(rowname, name) %>% summarise(mean = mean(value), std.dev = sd(value), se = sd(value)/sqrt(group_size(.)[1]))
+mim.summary %<>% mutate(snr = mean / se) %>% rename(rowname = "g1", name="g2")
+mim.summary %<>% 
+    rowwise() %>%
+    mutate(key = paste(sort(c(g1, g2)), collapse=""))
+mim.summary$key <- as.factor(mim.summary$key)
+mim.distinct <- distinct(mim.summary, key, .keep_all = T) %>% select(-key)
+write.csv(mim.distinct, file="20201112_mim_distinct.csv", row.names = T)
+
+# apply aracne algorithm
+mim.means <- purrr::reduce(mim.list, `+`) / length(mim.list)
+mim.aracne <- aracne(mim.means)
+mim.aracne.piv <- as.data.frame(mim.aracne) %>% 
+  rownames_to_column() %>% 
+  pivot_longer(cols = contains(c(reg.2.genes, "REDACTED")), values_to = "value", names_to = "g2") %>%
+  rowwise() %>%
+  rename(rowname = "g1") %>%
+  mutate(key = paste(sort(c(g1, g2)), collapse=""))
+mim.aracne.piv$key <- as.factor(mim.aracne.piv$key)
+mim.aracne.distinct <- distinct(mim.aracne.piv, key, .keep_all = T) %>% select(-key)
+mim.aracne.distinct %<>% filter(g1 != g2 & value > 0)
+write.csv(mim.aracne.distinct, file="20201112_aracne.csv")
+
+aracne.gnel <- as(mim.aracne, "graphNEL")
+
+plot_big_aracne <- function(g, fontsize=48){
+  g <- Rgraphviz::layoutGraph(g)
+  graph::nodeRenderInfo(g) <- list(fontsize=fontsize)
+  r <- Rgraphviz::renderGraph(g)
+  
+}
+
+plot_big_aracne(aracne.gnel, cex=10)
+```
+Filter Diagram
+```{r}
+library(plotly)
+fig <- plot_ly()
+fig <- fig %>% add_trace(
+  type="funnel",
+  y=c("Total OBFUSCATED","L2FC padj < .05","OBFUSCATED OBFUSCATED w/ ANOVA Factors padj < .01", "Genes with OBFUSCATED REDACTED Factor", "PLSR #1 SNR > 2", "PLSR #2 SNR > 2"), 
+  x=c(38776, 6084, 4720,2153, 98, 19)
+)
+fig <- fig %>%
+  layout(yaxis=list(categoryarray=c("Total OBFUSCATED","L2FC padj < .05","Unique OBFUSCATED w/ ANOVA Factors padj < .01", "Genes with OBFUSCATED REDACTED Factor", "PLSR #1 SNR > 2", "PLSR #2 SNR > 2")))
+```
+
+REDACTED
+```{r}
+l1k <- read.delim("REDACTED", sep = "\t")
+l1k.lm <- l1k %>% filter(Type=="landmark")
+l1k.lmoi <- l1k %>% filter(Type %in% c("landmark","best inferred"))
+lm.genes <- l1k.lm %>% pull(Symbol)
+lmoi.genes <- l1k.lmoi %>% pull(Symbol)
+```
+
+
+REDACTED Data Formatting
+```{r}
+REDACTED <- read.csv("REDACTED")
+sig.all.t0a <- read.csv("REDACTED")
+REDACTED.genes <- REDACTED$Name 
+REDACTED.genes[which(REDACTED.genes == "H2AFX")] <- "H2AX" # correct alias
+REDACTED.goi <- sig.all.t0a %>% filter(gene %in% REDACTED.genes)
+
+REDACTED.maxAbs.wi <- REDACTED.goi %>%
+  group_by(REDACTED.REDACTED, REDACTED, gene) %>%
+  mutate(L2FC_abs = abs(L2FC)) %>%
+  mutate(L2FC_max = max(L2FC_abs)) %>% 
+  ungroup %>%
+  group_by(gene) %>%
+  mutate(scaleAbsFC= z_scale(L2FC_max))
+
+REDACTED.exp.dat <- REDACTED.maxAbs.wi %>% 
+  filter(gene %in% REDACTED.genes) %>%
+  select(REDACTED.REDACTED, REDACTED, gene, timepoint, L2FC) %>%
+  group_by(gene) %>%
+  mutate(scaleFC= z_scale(L2FC))
+
+REDACTED.exp.dat$REDACTED_clean = str_replace_all(REDACTED.exp.dat$REDACTED, c("-" = "", " " = "", "_" = ""))
+REDACTED.exp.dat$REDACTED_clean = tolower(REDACTED.exp.dat$REDACTED_clean)
+REDACTED.exp.dat[which(REDACTED.exp.dat$REDACTED_clean == "REDACTED"),]$REDACTED_clean = "REDACTED"
+REDACTED.exp.dat[which(REDACTED.exp.dat$REDACTED_clean == "REDACTED"),]$REDACTED_clean = "REDACTED"
+REDACTED.exp.dat[which(REDACTED.exp.dat$REDACTED_clean == "REDACTED"),]$REDACTED_clean = "REDACTED"
+REDACTED.exp.dat[which(REDACTED.exp.dat$REDACTED_clean == "REDACTED"),]$REDACTED_clean = "REDACTED"
+REDACTED.exp.dat$REDACTED <- REDACTED.exp.dat$REDACTED_clean
+REDACTED.dat.piv <- pivot_wider(REDACTED.exp.dat, id_cols = c("REDACTED.REDACTED","REDACTED_clean"), names_from = c("gene","timepoint"), values_from = "scaleFC")
+REDACTED.dat.piv <- merge(REDACTED.dat.piv, REDACTED.pivot, by.x=c("REDACTED.REDACTED","REDACTED_clean"), by.y=c("REDACTED.REDACTED","Name"))
+
+REDACTED.dat.piv$REDACTED.y <- NULL
+
+
+write.csv(x=REDACTED.dat.piv, file="REDACTED")
+write.csv(x=REDACTED.exp.dat, file = "REDACTED", row.names = F)
+```
+
+```{r}
+
+library(minet)
+REDACTED.res <- read.csv("REDACTED")
+REDACTED.res %<>% mutate(snr = mean / se)
+REDACTED.res.filt <- REDACTED.res %>% filter(snr > 3)
+REDACTED.res.genes <- unique(c(REDACTED.res.filt$rowname, REDACTED.res.filt$name))
+REDACTED.aracne.dat <- REDACTED.dat.piv %>% select(contains(REDACTED.res.genes), REDACTED)
+
+tc <- caret::createDataPartition(1:nrow(REDACTED.aracne.dat), times = 100, p = 0.5, list = T)
+
+REDACTED.list <- list()
+for(i in 1:100){
+  REDACTED.list[[i]] <- build.mim(REDACTED.aracne.dat[tc[[i]],])
+}
+REDACTED.means <- purrr::reduce(REDACTED.list, `+`) / length(REDACTED.list)
+
+REDACTED.aracne <- aracne(REDACTED.means)
+REDACTED.aracne.piv <- as.data.frame(REDACTED.aracne) %>% 
+  rownames_to_column() %>% 
+  pivot_longer(cols = contains(c(REDACTED.res.genes, "REDACTED")), values_to = "value", names_to = "g2") %>%
+  rowwise() %>%
+  rename(rowname = "g1") %>%
+  mutate(key = paste(sort(c(g1, g2)), collapse=""))
+REDACTED.aracne.piv$key <- as.factor(REDACTED.aracne.piv$key)
+REDACTED.aracne.distinct <- distinct(REDACTED.aracne.piv, key, .keep_all = T) %>% select(-key)
+REDACTED.aracne.distinct %<>% filter(g1 != g2 & value > 0)
+write.csv(REDACTED.aracne.distinct, file="REDACTED")
+```
+
+Clustering Approach
+```{r}
+library(reshape2)
+library(caret)
+library(factoextra)
+clus.dat <- REDACTED.exp.dat %>% pivot_wider(id_cols=c("REDACTED.REDACTED","REDACTED_clean","gene","timepoint"), names_from=c("timepoint"), values_from=scaleFC)
+
+tc <- list()
+for(i in 1:1){
+  tmp <- clus.dat %>% 
+    group_by(gene) %>% 
+    sample_n(1) %>%
+    select(-REDACTED.REDACTED, -REDACTED_clean) %>%
+    drop_na()
+  tmp <- column_to_rownames(tmp, "gene")
+  d <- dist(tmp, method = "manhattan")
+  df <- melt(as.matrix(d), varnames = c("row", "col"))
+  tc[[i]] <- df[lower.tri(as.matrix(d), diag = T),]
+  }
+
+dists.flat <- data.table::rbindlist(tc, idcol="samp")
+dists.summary <- dists.flat %>% group_by(row, col) %>% summarise(mean_md = mean(value))
+
+dist.mat <- dists.summary %>% 
+  pivot_wider(names_from=col, values_from=mean_md) %>% 
+  column_to_rownames("row") %>% 
+  as.matrix()
+
+redist <- as.dist(dist.mat)
+h <- hclust(redist, method = "ward.D2")
+groups <- cutree(h, k=5)
+
+ # clus.dat.grp <- clus.dat %>% group_by(gene) %>% summarize("00h" = abs(max(`00h`)),
+#                                                           "24h" = abs(max(`24h`)),
+#                                                           "48h" = abs(max(`48h`)),
+#                                                           "72h" = abs(max(`72h`))
+#                                                           ) %>% ungroup
+
+# write.csv(x=clus.dat.grp, file = "20201125_REDACTED_clus_dat_max_abs_fc.csv", row.names = F)
+
+# clus.dat.grp <- column_to_rownames(clus.dat.grp, "gene")
+# clus.dat.grp %<>% drop_na()
+# clus.mat <- clus.dat.grp %>% mutate_all(as.numeric)
+# rownames(clus.mat) <- rownames(clus.dat.grp)
+
+# tc <- caret::createDataPartition(1:nrow(clus.mat), times = 100, p = 0.5, list = T)
+clus.list <- list()
+for(i in 1:100){
+  clus.list[[i]] <- get_dist(tc[[i]], method="spearman")
+}
+
+```
+
+```{r}
+labelColors = c("#CDB380", "#036564", "#EB6841", "#EDC951")
+labelColors = viridis::viridis(5)
+# cut dendrogram in 4 clusters
+clusMember = cutree(h, 5)
+# function to get color labels
+colLab <- function(n) {
+    if (is.leaf(n)) {
+        a <- attributes(n)
+        labCol <- labelColors[clusMember[which(names(clusMember) == a$label)]]
+        attr(n, "nodePar") <- c(a$nodePar, lab.col = labCol)
+    }
+    n
+}
+# using dendrapply
+hd <- as.dendrogram(h)
+clusDendro = dendrapply(hd, colLab)
+# make plot
+plot(clusDendro, main = "Dendrogram", type = "triangle")
+```
+
+Updated Clustering Approach
+```{r}
+set.seed(20201130)
+library(lsa) # for cosine distance function
+library(reshape2) # for melt function
+REDACTED.exp.dat <- read.csv("20201130_REDACTED_exp_dat_cleaned.csv")
+REDACTED.pivot <- read.csv("20201130_REDACTED_pivot.csv")
+# The cosine function calculates distances between COLUMNS NOT ROWS
+
+# quick function to convert a dataframe to a matrix and optionally transpose
+df_to_matrix <- function(x, rowname_col = NULL, transpose = F){
+  if(!is.null(rowname_col)){
+    matrix <- as.matrix(column_to_rownames(x, var=rowname_col))
+  } else{
+      matrix <- as.matrix(x)
+  }
+  if(transpose == T){
+    matrix <- t(matrix)
+  }
+  return(matrix)
+}
+
+jk_trajectories <- function(x, REDACTED_col){
+  REDACTED <- unique(pull(x, !!as.symbol(REDACTED_col))) # !!as.symbol is important, don't touch it
+  # calculate the all-data distances
+  x_tmp <- arrange(x, !!as.symbol(REDACTED_col))
+  x_tmp <- pivot_wider(x_tmp, id_cols = gene, names_from = !!as.symbol(REDACTED_col), values_from = c(`00h`, `24h`,`48h`,`72h`))
+  x_tmp <- df_to_matrix(x_tmp, "gene", transpose = T)
+  x_tmp_dist <- cosine(x_tmp)
+  x_tmp_df <- melt(as.matrix(x_tmp_dist), varnames=c("row","col"))
+  jk_dists <- list()
+  for(i in REDACTED){
+   # leave out the REDACTED in the current iteration
+   tmp <- filter(x, !!as.symbol(REDACTED_col) != i) # !!as.symbol is important, don't touch it
+   # sort rows alphabetically
+   tmp <- arrange(tmp, !!as.symbol(REDACTED_col))
+   # concatenate trajectories into one big vector per gene
+   tmp <- pivot_wider(tmp, id_cols = gene, names_from = !!as.symbol(REDACTED_col), values_from = c(`00h`, `24h`,`48h`,`72h`))
+   print(tmp)
+   # convert to matrix
+   tmp <- df_to_matrix(tmp, "gene", transpose = T) # transpose because cosine d istance operates across columns
+   # calculate distance
+   tmp_dist <- cosine(tmp)
+   # convert distance object to long dataframe
+   df <- melt(as.matrix(tmp_dist), varnames = c("row", "col"))
+   df <- df[lower.tri(as.matrix(tmp_dist), diag = T),]
+   # calculate the pseudo value of each gene-gene pair
+   pvs <- c()
+   for(j in 1:nrow(df)){
+     x_tmp_val <- pull(filter(x_tmp_df, (row==df[j,]$row) & (col==df[j,]$col)), value)
+     pv <- x_tmp_val - df[j,]$value
+     pvs <- c(pvs, pv)
+   }
+   df$pv <- pvs
+   jk_dists[[i]] <- df
+ }
+ # flatten to a single dataframe
+ dists.flat <- data.table::rbindlist(jk_dists)
+ # now calculate average pseudo-value
+ dists.summary <- dists.flat %>% group_by(row, col) %>% summarise(jk_est = mean(abs(pv), na.rm=T), jk_var = var(abs(pv), na.rm =T), jk_sd = sd(abs(pv), na.rm=T))
+ colnames(x_tmp_df) <- c("row","col","all_data_est")
+ dists.summary.merge <- merge(dists.summary, x_tmp_df, by=c("row","col"))
+ dists.summary.merge <- dists.summary.merge %>% mutate(snr = all_data_est / jk_est)
+ # return long dataframe of the results
+ return(dists.summary.merge)
+  # x_tmp_df <- x_tmp_df[lower.tri(as.matrix(x_tmp_dist), diag = T),]
+  # return(x_tmp_df)
+  }
+
+clus.dat <- REDACTED.exp.dat %>% pivot_wider(id_cols=c("REDACTED.REDACTED","REDACTED_clean","gene","timepoint"), names_from=c("timepoint"), values_from=scaleFC)
+clus.dat.REDACTED <- merge(clus.dat, REDACTED.pivot, by.x=c("REDACTED.REDACTED","REDACTED_clean"), by.y = c("REDACTED.REDACTED","Name"))
+
+# get minimum complete set of REDACTED
+unique_REDACTED <- clus.dat.REDACTED %>% 
+  group_by(REDACTED.REDACTED) %>%
+  group_split() %>%
+  map("REDACTED_clean") %>%
+  map(unique)
+
+min_set_REDACTED <- Reduce(intersect, unique_REDACTED)
+
+# work only with minimum complete set of available REDACTED
+clus.dat.REDACTED %<>% filter(REDACTED_clean %in% min_set_REDACTED)
+
+# get range of REDACTEDs for each REDACTED REDACTED
+REDACTED.REDACTED.ranges <- clus.dat.REDACTED %>% 
+  group_by(REDACTED.REDACTED) %>% 
+  group_split(.keep=T) %>% 
+  map("REDACTED") %>% 
+  map(unique)
+names(REDACTED.REDACTED.ranges) <- c("REDACTED","REDACTED","REDACTED","REDACTED","REDACTED")
+
+# Each entry in this list is a REDACTED.REDACTED - REDACTED pair
+clus.split <- clus.dat.REDACTED %>% group_by(REDACTED.REDACTED) %>% group_split()
+# Now split it even further into high v low REDACTED (based on median REDACTED)
+clus.split.grouped <- list()
+for(i in 1:length(clus.split)){
+  # get median for current REDACTED REDACTED
+  med.REDACTED <- median(REDACTED.REDACTED.ranges[[clus.split[[i]]$REDACTED.REDACTED[1]]])
+  # anything < median goes here
+  low <- clus.split[[i]] %>% filter(REDACTED < med.REDACTED)
+  # anything >= median goes here
+  high <- clus.split[[i]] %>% filter(REDACTED >= med.REDACTED)
+  # combine into list
+  res <- list(low, high)
+  names(res) <- c("low","high")
+  # perform pseudo-jackknifing
+  res <- map_depth(.depth = 1, .x = res, .f = ~ jk_trajectories(., REDACTED_col = "REDACTED_clean"))
+  # add to bigger list
+  clus.split.grouped[[i]] <- res
+}
+
+clus.split.grouped %<>% map_depth(.depth=2, .f = ~ filter(., row != col))
+clus.split.grouped %<>% map_depth(.depth=2, ~ rename(., row = "gene1", col = "gene2"))
+clus.split.grouped %<>% map_depth(.depth=2, ~ drop_na(.))
+
+```
+
+```{r}
+library(xlsx)
+wb <- createWorkbook()
+sheet1 <- createSheet(wb, sheetName = "REDACTED_LOW")
+sheet2 <- createSheet(wb, sheetName = "REDACTED_HIGH")
+sheet3 <- createSheet(wb, sheetName = "REDACTED_LOW")
+sheet4 <- createSheet(wb, sheetName = "REDACTED_HIGH")
+sheet5 <- createSheet(wb, sheetName = "REDACTED_LOW")
+sheet6 <- createSheet(wb, sheetName = "REDACTED_HIGH")
+sheet7 <- createSheet(wb, sheetName = "REDACTED_LOW")
+sheet8 <- createSheet(wb, sheetName = "REDACTED_HIGH")
+sheet9 <- createSheet(wb, sheetName = "REDACTED_LOW")
+sheet10 <- createSheet(wb, sheetName = "REDACTED_HIGH")
+
+addDataFrame(clus.split.grouped[[1]][["low"]], sheet = sheet1)
+addDataFrame(clus.split.grouped[[1]][["high"]], sheet = sheet2)
+addDataFrame(clus.split.grouped[[2]][["low"]], sheet = sheet3)
+addDataFrame(clus.split.grouped[[2]][["high"]], sheet = sheet4)
+addDataFrame(clus.split.grouped[[3]][["low"]], sheet = sheet5)
+addDataFrame(clus.split.grouped[[3]][["high"]], sheet = sheet6)
+addDataFrame(clus.split.grouped[[4]][["low"]], sheet = sheet7)
+addDataFrame(clus.split.grouped[[4]][["high"]], sheet = sheet8)
+addDataFrame(clus.split.grouped[[5]][["low"]], sheet = sheet9)
+addDataFrame(clus.split.grouped[[5]][["high"]], sheet = sheet10)
+
+saveWorkbook(wb, file = "OBFUSCATED")
+```
+
+```{r}
+# then jackknife distances
+ # jk_dists <- list()
+ # for(i in REDACTED){
+ #   # leave out the REDACTED in the current iteration
+ #   tmp <- filter(x, !!as.symbol(REDACTED_col) != i) # !!as.symbol is important, don't touch it
+ #   # sort rows alphabetically
+ #   tmp <- arrange(tmp, !!as.symbol(REDACTED_col))
+ #   # concatenate trajectories into one big vector per gene
+ #   tmp <- pivot_wider(tmp, id_cols = gene, names_from = !!as.symbol(REDACTED_col), values_from = c(`00h`, `24h`,`48h`,`72h`))
+ #   # convert to matrix
+ #   tmp <- df_to_matrix(tmp, "gene", transpose = T) # transpose because cosine distance operates across columns
+ #   # calculate distance
+ #   tmp_dist <- cosine(tmp)
+ #   # convert distance object to long dataframe
+ #   df <- melt(as.matrix(tmp_dist), varnames = c("row", "col"))
+ #   df <- df[lower.tri(as.matrix(tmp_dist), diag = T),]
+ #   # calculate the pseudo value of each gene-gene pair
+ #   pvs <- c()
+ #   for(j in 1:nrow(df)){
+ #     x_tmp_val <- pull(filter(x_tmp_df, (row==df[j,]$row) & (col==df[j,]$col)), value)
+ #     pv <- x_tmp_val - df[j,]$value
+ #     pvs <- c(pvs, pv)
+ #   }
+ #   df$pv <- pvs
+ #   jk_dists[[i]] <- df
+ # }
+ # flatten to a single dataframe
+ # dists.flat <- data.table::rbindlist(jk_dists)
+ # # now calculate average pseudo-value
+ # dists.summary <- dists.flat %>% group_by(row, col) %>% summarise(jk_est = mean(pv, na.rm=T), jk_var = var(pv, na.rm =T), jk_sd = sd(pv, na.rm=T))
+ # return long dataframe of the results
+ # return(dists.summary)
+```
+
+```{r}
+plt_snr <- function(x){
+  x$snr <- abs(x$snr)
+  ggplot(data = x, aes(snr)) +
+  geom_histogram()
+}
+
+clus.split.grouped %>% map_depth(.depth=2, .f = plt_snr)
+```
+
+Kruskal Wallis Alternative
+```{r}
+library(rstatix)
+sig.all.t0a <- read.csv("OBFUSCATED") %>% select(-X)
+sig.all.t0a$REDACTED <- as.factor(sig.all.t0a$REDACTED)
+sig.all.t0a$gene <- as.factor(sig.all.t0a$gene)
+sig.all.t0a$timepoint <- as.factor(sig.all.t0a$timepoint)
+sig.all.t0a$timepoint <- relevel(sig.all.t0a$timepoint, ref="00h")
+
+
+# These below aren't used or useful, just messing around
+kw.all.out.t0a <- sig.all.t0a %>% 
+  group_by(gene) %>% 
+  do(broom::tidy(kruskal.test(formula = as.formula("L2FC ~ REDACTED"), data = .))) 
+
+kw.time <- sig.all.t0a %>% 
+  group_by(gene) %>% 
+  do(broom::tidy(kruskal.test(formula = as.formula("L2FC ~ OBFUSCATED"), data = .))) 
+
+kw.all.out.t0a$padj = p.adjust(kw.all.out.t0a$p.value, method='BH')
+kw.time$padj = p.adjust(kw.time$p.value, method='BH')
+
+kw.combined <- kw.all.out.t0a %>%
+  filter(padj < 0.01) %>%
+  inner_join(
+    kw.time %>%
+      filter(padj < 0.01),
+    by='gene'
+  )
+# 981 genes with both significant (padj < 0.01) time and REDACTED effects on L2FC
+
+write.csv(kw.combined, file="OBFUSCATED", row.names = F)
+```
+
+PLS Regression
+```{r}
+library(pls)
+library(caret)
+library(parallel)
+library(cleaner)
+set.seed(20201105)
+
+
+sig.all.t0a<- read.csv("OBFUSCATED")
+kw.results  <- read.csv('OBFUSCATED')
+goi <- kw.results$gene
+sig.goi <- sig.all.t0a %>% filter(gene %in% goi)
+sig.goi
+# maxAbsFC = the maximum of the absolute value of the z-transformed L2FC values
+# This commented block does the same as the uncommented REDACTED below it, but retains intermediate values
+sig.maxAbs.wi <- sig.goi %>%
+  group_by(REDACTED.REDACTED, REDACTED, gene) %>%
+  mutate(L2FC_abs = abs(L2FC)) %>%
+  mutate(L2FC_max = max(L2FC_abs)) %>% 
+  ungroup %>%
+  group_by(gene) %>%
+  mutate(scaleAbsFC= z_scale(L2FC_max))
+sig.maxAbs.wi$L2FC_abs[is.nan(sig.maxAbs.wi$L2FC_abs)] <- 0
+sig.maxAbs.wi$scaleAbsFC[is.nan(sig.maxAbs.wi$scaleAbsFC)] <- 0
+sig.maxAbs.wi$scaleAbsFC[is.na(sig.maxAbs.wi$scaleAbsFC)] <- 0
+
+sig.maxAbs <- sig.maxAbs.wi %>% select(REDACTED.REDACTED, REDACTED, gene, scaleAbsFC) %>% distinct()
+
+# Load REDACTED data
+REDACTED <- read.xlsx("REDACTED", sheet = "Sup Table S2", startRow = 2)
+# clean REDACTED REDACTED names
+REDACTED$Name <- stringr::str_replace_all(REDACTED$Name, c("\\(" ="", "\\)" = "", "\\+" = "", "^--" = " ", "^-" = "", "^ " = "", "-" = "", " " = "", "_" =""))
+REDACTED$Name <- tolower(REDACTED$Name)
+# have to clean up REDACTED names in sig.maxAbs too
+sig.maxAbs$REDACTED_clean = str_replace_all(sig.maxAbs$REDACTED, c("-" = "", " " = "", "_" = ""))
+sig.maxAbs$REDACTED_clean = tolower(sig.maxAbs$REDACTED_clean)
+sig.maxAbs[which(sig.maxAbs$REDACTED_clean == "OBFUSCATED"),]$REDACTED_clean = "OBFUSCATED"
+sig.maxAbs[which(sig.maxAbs$REDACTED_clean == "OBFUSCATED"),]$REDACTED_clean = "OBFUSCATED"
+sig.maxAbs[which(sig.maxAbs$REDACTED_clean == "OBFUSCATED"),]$REDACTED_clean = "OBFUSCATED"
+sig.maxAbs[which(sig.maxAbs$REDACTED_clean == "OBFUSCATED"),]$REDACTED_clean = "OBFUSCATED"
+
+REDACTED.pivot <- REDACTED %>% 
+  select(Name,REDACTED,REDACTED,REDACTED,REDACTED,`REDACTED`) %>% 
+  pivot_longer(cols=c("REDACTED","REDACTED","REDACTED","REDACTED","REDACTED"), names_to = "REDACTED.REDACTED", values_to="REDACTED")
+pls.dat <- merge(sig.maxAbs, REDACTED.pivot, by.x=c("REDACTED.REDACTED","REDACTED_clean"), by.y=c("REDACTED.REDACTED","Name"))
+pls.pred <- pivot_wider(pls.dat, id_cols = c(REDACTED.REDACTED,gene,REDACTED_clean), names_from = gene, values_from = c(scaleAbsFC))
+pls.pred <- merge(pls.pred, REDACTED.pivot, by.x=c("REDACTED.REDACTED","REDACTED_clean"), by.y=c("REDACTED.REDACTED","Name"))
+pls.pred.blind <- pls.pred %>% select(-REDACTED.REDACTED, -REDACTED_clean)
+pls.train.ind <- createDataPartition(1:nrow(pls.pred.blind), times = 1, p=0.6, list=FALSE)
+train.dat <- pls.pred.blind[pls.train.ind,]
+test.dat <- pls.pred.blind[-pls.train.ind,]
+
+# NEW 2021
+# reg <- plsr(REDACTED ~ . , data = train.dat, validation="LOO")
+# fit.resid <- cbind(reg$fitted.values, reg$residuals)
+# 
+# res_pred = predict(reg, ncomp =4, data=test.dat)
+
+# ORIGINAL
+reg <- plsr(REDACTED ~ . , data = pls.pred.blind, validation="LOO")
+fit.resid <- cbind(reg$fitted.values, reg$residuals)
+
+
+
+
+reg.6 <- plsr(REDACTED ~ . , data = pls.pred.blind, validation="LOO", ncomp=6, jackknife=TRUE)
+res.jt <- jack.test(reg.6, ncomp=6)
+
+res.jt.df <- cbind(res.jt$coefficients, res.jt$sd, res.jt$tvalues, res.jt$pvalues)
+colnames(res.jt.df) <- c("coeff","Sd", "tvalue","pvalue")
+rownames(res.jt.df) <- rownames(res.jt$coefficients)
+res.jt.df <- as.data.frame(res.jt.df)
+res.jt.df <- res.jt.df %>% rownames_to_column(var="gene")
+res.jt.df <- res.jt.df %>% mutate(padj = p.adjust(res.jt$pvalue, method = "BH"))
+res.jt.df %<>% mutate(abs.snr = abs(coeff / Sd))
+
+
+res.vj <- var.jack(reg.6, ncomp=6) 
+res.vj.df <- as.data.frame(res.vj)
+colnames(res.vj.df) <- c("var.est")
+rownames(res.vj.df) <- rownames(res.vj)
+res.vj.df %<>% rownames_to_column()
+res.vj.df %<>% mutate(std.err = sqrt(var.est))
+#res.vj.df %<>% mutate(snr =  coeff/ std.err)
+
+res.vj.cv <- var.jack(reg.6, ncomp=6, covariance = T)
+
+# according to the source code, the standard error whiskers in the plot
+# are just the square root of the output of var.jack, which returns
+# variance estimates of a jackknifed pls regression
+# Which is just equal to the standard deviation
+
+#coeff <- reg.4$validation$coefficients
+#residuals <- reg.4$residuals
+#se <- coeff_se(coeff)
+
+coefplot(reg.6, ncomp=6, se.whiskers = T, main = "Regression Coefficients of  genes, ncomp = 4")
+
+snr.dat <- res.jt.df %>% filter(abs.snr > 2)
+snrplt <- ggplot(data=res.jt.df, aes(x=abs.snr)) +
+  geom_histogram() +
+  lims(x=c(0,5)) +
+  theme_pubclean() +
+  ggtitle("Distribution of signal-to-noise ratio")
+
+```
+
+Second PLS Regression
+```{r}
+reg.dat.2 <- sig.maxAbs.wi %>% 
+  filter(gene %in% snr.dat$gene) %>%
+  select(REDACTED.REDACTED, REDACTED, gene, timepoint, L2FC) %>%
+  group_by(gene) %>%
+  mutate(scaleFC= z_scale(L2FC))
+ 
+reg.dat.2$REDACTED_clean = str_replace_all(reg.dat.2$REDACTED, c("-" = "", " " = "", "_" = ""))
+reg.dat.2$REDACTED_clean = tolower(reg.dat.2$REDACTED_clean)
+reg.dat.2[which(reg.dat.2$REDACTED_clean == "OBFUSCATED"),]$REDACTED_clean = "OBFUSCATED"
+reg.dat.2[which(reg.dat.2$REDACTED_clean == "OBFUSCATED"),]$REDACTED_clean = "OBFUSCATED"
+reg.dat.2[which(reg.dat.2$REDACTED_clean == "OBFUSCATED"),]$REDACTED_clean = "OBFUSCATED"
+reg.dat.2[which(reg.dat.2$REDACTED_clean == "OBFUSCATED"),]$REDACTED_clean = "OBFUSCATED"
+reg.dat.2$REDACTED <- reg.dat.2$REDACTED_clean
+reg.dat.2.piv <- pivot_wider(reg.dat.2, id_cols = c("REDACTED.REDACTED","REDACTED_clean"), names_from = c("gene","timepoint"), values_from = "scaleFC")
+reg.dat.2.piv <- merge(reg.dat.2.piv, REDACTED.pivot, by.x=c("REDACTED.REDACTED","REDACTED_clean"), by.y=c("REDACTED.REDACTED","Name"))
+
+reg.dat.2.blind <- reg.dat.2.piv %>% select(-REDACTED.REDACTED, -REDACTED_clean)
+pls.reg.2 <- plsr(REDACTED ~ . , data = reg.dat.2.blind, validation="LOO")
+pls.reg.2.8comp <- plsr(REDACTED ~ . , data = reg.dat.2.blind, validation="LOO", ncomp=8, jackknife=TRUE)
+
+
+res.2.jt <- jack.test(pls.reg.2.8comp, ncomp=8)
+
+res.2.jt.df <- cbind(res.2.jt$coefficients, res.2.jt$sd, res.2.jt$tvalues, res.2.jt$pvalues)
+colnames(res.2.jt.df) <- c("coeff","Sd", "tvalue","pvalue")
+rownames(res.2.jt.df) <- rownames(res.2.jt$coefficients)
+res.2.jt.df <- as.data.frame(res.2.jt.df)
+res.2.jt.df <- res.2.jt.df %>% rownames_to_column(var="gene")
+res.2.jt.df <- res.2.jt.df %>% mutate(padj = p.adjust(res.2.jt$pvalue, method = "BH"))
+res.2.jt.df %<>% mutate(abs.snr = abs(coeff / Sd))
+
+snrplt.2 <- ggplot(data=res.2.jt.df, aes(x=abs.snr)) +
+  geom_histogram() +
+  lims(x=c(0,5)) +
+  theme_pubclean() +
+  ggtitle("Distribution of signal-to-noise ratio")
+
+
+res.2.8comp.covar <- var.jack(pls.reg.2.8comp, ncomp=8, covariance = T)
+
+loadingplot(pls.reg.2.8comp, comps = 1:6, scatter = T, identify = F)
+
+biplot(pls.reg.2.8comp, comps=c(1,3))
+
+```   
+
+pairwise Kendall's tau-b
+```{r}
+set.seed(20210416)
+gene.dat <- read.csv("OBFUSCATED") %>% select(-X)
+gene.dat %<>% 
+  mutate(REDACTED_clean = tolower(REDACTED))
+gene.dat$REDACTED_clean = str_replace_all(gene.dat$REDACTED_clean, c("-" = "", " " = "", "_" = ""))
+gene.dat[which(gene.dat$REDACTED_clean == "OBFUSCATED"),]$REDACTED_clean = "OBFUSCATED"
+gene.dat[which(gene.dat$REDACTED_clean == "OBFUSCATED"),]$REDACTED_clean = "OBFUSCATED"
+gene.dat[which(gene.dat$REDACTED_clean == "OBFUSCATED"),]$REDACTED_clean = "OBFUSCATED"
+gene.dat[which(gene.dat$REDACTED_clean == "OBFUSCATED"),]$REDACTED_clean = "OBFUSCATED"
+gene.dat$REDACTED <- gene.dat$REDACTED_clean
+kendall.dat <- merge(gene.dat, REDACTED.pivot, by.x=c("REDACTED.REDACTED","REDACTED_clean"), by.y=c("REDACTED.REDACTED","Name"))
+
+# recode timepoints as numeric
+# scale L2FC within genes (ie. across REDACTED / REDACTED REDACTEDs)
+# drop NA values
+kendall.dat %<>% 
+  mutate(timepoint=dplyr::recode(timepoint, 
+                          "24h" = 1,
+                          "48h" = 2,
+                          "72h" = 3)) %>%
+  group_by(gene) %>%
+  mutate(scaleFC = z_scale(L2FC)) %>%
+  ungroup() %>%
+  drop_na()
+
+# Kendall's tau-b can account for ties in data, of which there are many in this case
+
+ken.res = kendall.dat %>%
+  group_by(gene) %>%
+  do(
+    tidy(
+      cor.test(
+        x = .$L2FC, 
+        y = .$REDACTED,
+        method = 'kendall' # both kendall and spearman return identical numbers of p.value < 0.01
+  )))
+
+# must perform multiple test correction
+ken.res %<>%
+  ungroup %>%
+  mutate(p.adj = p.adjust(.$p.value, method='BH'))
+
+ken.res.sig <- ken.res %>% filter(p.adj < 0.01)
+```
+1,716 genes with p.adj < .05
+1,156 genes with p.adj < 0.01
+
+PLS Regression on Significant Genes (alpha = 0.01)
+```{r}
+library(pls)
+
+filt.pls.dat <- kendall.dat %>% 
+  filter(gene %in% ken.res.sig$gene) %>%
+  drop_na()
+
+# summarize gene trajectories
+gene.trajectories <- filt.pls.dat %>%
+  pivot_wider(
+    id_cols=c(REDACTED.REDACTED, REDACTED_clean, gene, REDACTED), (p.adj = p.adjust(.$p.value, method='BH')),
+    values_from = c(scaleFC), 
+    names_from = c(gene,timepoint),
+    )
+
+gene.traj.blind <- gene.trajectories %>% select(-REDACTED.REDACTED, -REDACTED_clean)
+names(gene.traj.blind) <- make.names(names(gene.traj.blind))
+
+ken.res.pls <- plsr(REDACTED ~ ., data = gene.traj.blind, validation="LOO", ncomp=6, jackknife=T)
+
+jt = jack.test(ken.res.pls, ncomp=6)
+
+jt.frame <- data.frame(structure(list(coefficients=jt$coefficients, sd = jt$sd, tvalues=jt$tvalues, df=jt$df, pvalues = jt$pvalues)))
+colnames(jt.frame) <- c('coefficient','sd','tvalue','df','pvalue')
+jt.frame %<>% rownames_to_column(var='gene')
+
+# multiple test correction
+jt.frame %<>% mutate(p.adj = p.adjust(.$pvalue, method='BH'))
+
+validationplot(ken.res.pls)
+
+```
+
+```{r}
+library(randomForest)
+library(caTools)
+library(caret)
+library(e1071)
+
+set.seed(20210421)
+
+rf.dat <- filt.pls.dat %>% select(REDACTED.REDACTED, REDACTED_clean, gene, scaleFC, REDACTED)
+samp = sample.split(rf.dat$REDACTED.REDACTED, SplitRatio = 2/3)
+rf.dat.train <- subset(rf.dat, samp==TRUE)
+rf.dat.test <- subset(rf.dat, samp==FALSE)
+
+tuneGrid <- expand.grid(.mtry = c(1: 10))
+
+tr.con = trainControl(
+  method = 'repeatedcv',
+  number=5,
+  repeats=5,
+)
+
+rf.tune.mtry = train(REDACTED ~ .,
+                 data=rf.dat.train,
+                 method='rf',
+                 metric='RMSE',
+                 tuneGrid=tuneGrid,
+                 trControl=tr.con,
+                 importance=TRUE,
+                 nodesize=10,
+                 maxnodes=15)-
+
+rf.tune.mtry$bestTune$mtry
+#rf = randomForest(x = train.x, y = train.y, xtest = test.x, ytest = test.y, ntree=300, importance=TRUE)
+
+# parameter tuning found mtry = 10 to be the bestreply
+
+rf.final = randomForest::randomForest(REDACTED ~ ., 
+                                      data=rf.dat.train, 
+                                      mtry=2, 
+                                      xtest=select(rf.dat.test, -REDACTED),
+                                      ytest=pull(rf.dat.test, REDACTED),
+                                      importance=TRUE,
+                                      keep.forest=TRUE)
+```
+As expected, REDACTED and REDACTED REDACTED have the most importance on determining REDACTED, with REDACTED being the most important by far.
+Gene is the least important, and scaled L2FC is only slightly more important.
+
+So how to extract genes? Can we?
+What if we look for genes that every REDACTED REDACTED or REDACTED has in common and find the overlap
+This requires redoing the kendall's tau analysis on a per REDACTED-REDACTED basis
+```{r}
+do.ken <- function(x){
+  ken.res = x %>%
+  group_by(gene) %>%
+  do(
+    tidy(
+      cor.test(
+        x = .$scaleFC, 
+        y = .$REDACTED,
+        method = 'kendall' # both kendall and spearman return identical numbers of p.value < 0.01
+  )))
+  ken.res %<>% 
+    ungroup %>%
+    mutate(p.adj = p.adjust(.$p.value, method='BH')) %>%
+    arrange(p.adj)
+  ken.res['REDACTED.REDACTED'] = x$REDACTED.REDACTED[1]
+  return(ken.res)
+}
+
+res = kendall.dat %>% 
+  group_split(REDACTED.REDACTED, .keep = T) %>%
+  map(do.ken)
+
+res.combined <- bind_rows(res) %>%
+  filter(p.adj < 0.05)
+
+overlaps = res.combined %>% 
+  group_by(gene) %>% 
+  summarise(n=n(), REDACTED.REDACTED=paste0(REDACTED.REDACTED, collapse=", ")) %>%
+  arrange(desc(n))
+all
+overlaps
+```
+Overlaps between individual REDACTED REDACTEDs are surprisingly few, but not completely empty
+

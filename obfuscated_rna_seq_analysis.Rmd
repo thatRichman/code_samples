@@ -1,0 +1,77 @@
+---
+title: "OBFUSCATED RNA-Seq Analysis"
+output: html_notebook
+---
+
+```{r}
+BiocManager::install("DESeq2")
+BiocManager::install("Rsamtools")
+BiocManager::install("GenomicFeatures")
+BiocManager::install("apeglm")
+
+library(tidyverse)
+library(DESeq2)
+library(Rsamtools)
+library(GenomicFeatures)
+library(apeglm)
+```
+
+Load and format gene tables
+```{r}
+ff <- list.files(path = "OBFUSCATED_rna_seq/OBFUSCATED_gene_tabs/", pattern = "*ReadsPerGene.out.tab$", full.names = TRUE)
+tab.files <- lapply(ff, read.table, skip = 4)
+counts <- as.data.frame(sapply(tab.files, function(x) x[,3]))
+ff <- gsub("[.]ReadsPerGene[.]out[.]tab", "", ff)
+ff <- gsub("[.]/counts/", "", ff)
+colnames(counts) <- ff
+colnames(counts) <- str_extract(colnames(counts),"(?<=//).*(?=_qc)")
+row.names(counts) <- tab.files[[1]]$V1
+design.table <- read.table(file = "OBFUSCATED_rna_seq/OBFUSCATED_exp_design_tab.csv", header = T,sep=",")
+rownames(design.table) <- design.table$sample
+design.table$group <- paste(design.table$treatment, design.table$time, design.table$concentration)
+
+# Remove extraneous samples from counts table
+counts_fixed <- counts[,which(colnames(counts) %in% rownames(design.table))]
+design.table <- design.table[colnames(counts_fixed),]
+design.table %<>% arrange(concentration, ascending=FALSE) ## VERY IMPORTANT TO INCLUDE THIS BEFORE MAKING DDS
+counts_fixed <- counts_fixed[,rownames(design.table)]
+OBFUSCATED_dds <- DESeqDataSetFromMatrix(countData = counts_fixed,
+                                  colData = design.table,
+                                  design = ~ group)
+
+OBFUSCATED_dds$group <- relevel(OBFUSCATED_dds$group, ref = "OBFUSCATED 24h 0.1")
+OBFUSCATED_res <- DESeq(OBFUSCATED_dds)
+
+
+# Load list of relevant genes
+genes <- read.delim("OBFUSCATED_rna_seq/nsclc_network_gene_guide.csv", sep =",")$gene
+
+OBFUSCATED_v_OBFUSCATED <- results(OBFUSCATED_res, contrast=c("group","OBFUSCTAED 24h","OBFUSCATED 24h"))
+shrunk_test <- lfcShrink(dds = OBFUSCATED_res, res = OBFUSCATED_v_OBFUSCATED, type="apeglm", coef="")
+plotMA(OBFUSCATED_v_OBFUSCATED, ylim=c(2,-2))
+
+```
+
+```{r}
+test <- results(OBFUSCATED_res, contrast=c("group","OBFUSCATED 48h", "OBFUSCATED 48h"))
+test %>% as.data.frame %>% rownames_to_column() %>% filter(rowname %in% genes)
+```
+
+```{r}
+pca.dt <- design.table
+pca.dt$concentration <- factor(pca.dt$concentration)
+pca_dds <- DESeqDataSetFromMatrix(countData = counts_fixed,
+                                  colData = pca.dt,
+                                  design = ~ concentration + group)
+
+pcData = plotPCA(vst(pca_dds), intgroup=c("treatment","concentration", "time"), returnData=TRUE, ntop=1000)
+percentVar <- round(100 * attr(pcData, "percentVar"))
+pca <- ggplot(pcData, aes(x = PC1, y = PC2, color = concentration, shape=time)) +
+  geom_point(size = 3) +
+  xlab(paste0("PC1: ", percentVar[1], "% variance")) +
+  ylab(paste0("PC2: ", percentVar[2], "% variance")) +
+  coord_fixed() +
+  ggtitle("PCA ") #+ 
+  #facet_wrap("treatment") 
+ggsave("OBFUSCATED", plot = pca, dpi = 300, height = 10, width = 10)
+  ```

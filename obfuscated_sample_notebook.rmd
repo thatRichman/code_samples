@@ -1,0 +1,242 @@
+---
+title: "Assessing OBFUSCATED and OBFUSCATED OBFUSCATED in Clinical Trials"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE} 
+library(tidyverse)
+library(xml2)
+library(devtools)
+library(RPostgreSQL)
+library(ggplot2)
+library(ggpubr)
+library(scales)
+library(data.table)
+library(magrittr)
+library(rentrez)
+```
+
+In order to gauge which OBFUSCATEDs and treatments are potentially most relevant, data from clinicaltrials.gov has been digested and visualized.
+
+## Identifying Relevant Trials
+
+The exact query used to identify relevant trials is:
+`AREA[OverallStatus] EXPAND[Term] COVER[FullMatch] "Completed" AND AREA[ResultsFirstSubmitDate] NOT MISSING AND AREA[StudyType] EXPAND[Term] COVER[FullMatch] "Interventional" AND`\n `AREA[ConditionSearch] OBFUSCATED AND AREA[InterventionSearch] OBFUSCATED`
+
+In plain English, this is a search for interventional clinical trials that have completed enrollment, have results, contain the keyword 'OBFUSCATED' and the OBFUSCATED is a OBFUSCATED.
+
+In total, this returned OBFUSCATED studies.
+
+Rather than try to parse the XML into flat files, grab just the NCT IDs 
+```{r, results="hide"}
+nct_ids = c()
+for(i in list.files(path = "OBFUSCATED", full.names = T)){
+  f = read_xml(i)
+  nct_ids <- c(nct_ids, xml_text(xml_find_all(f, "//nct_id")))
+}
+write.table(nct_ids, file =  "OBFUSCATED", sep = ",",row.names = F)
+```
+
+### The AACT CTTI Database is continuously updated with all clinical trial data from clinicaltrials.gov
+```{r}
+drv <- dbDriver('PostgreSQL') 
+con <- dbConnect(drv, dbname="aact",host="aact-db.ctti-clinicaltrials.org", port=5432, user="scrichman", password="RGHAACT!$")
+trial_details <- dbGetQuery(con, paste0("select distinct * from studies where nct_id in ('",paste(nct_ids, sep = "", collapse = "\',\'"),"')"))
+intervention_details <- dbGetQuery(con, paste0("select distinct * from interventions where nct_id in ('",paste(nct_ids, sep = "", collapse = "\',\'"),"')"))
+reference_details <- dbGetQuery(con, paste0("select distinct * from study_references where nct_id in ('",paste(nct_ids, sep = "", collapse = "\',\'"),"')"))
+condition_details <- dbGetQuery(con, paste0("select distinct * from conditions where nct_id in ('",paste(nct_ids, sep = "", collapse = "\',\'"),"')"))
+outcome_details <- dbGetQuery(con, paste0("select distinct * from outcomes where nct_id in ('",paste(nct_ids, sep = "", collapse = "\',\'"),"')"))
+analysis_details <- dbGetQuery(con, paste0("select distinct * from outcome_analyses where nct_id in ('",paste(nct_ids, sep = "", collapse = "\',\'"),"')"))
+
+dbDisconnect(con)
+
+# Prevent errors such as "OBFUSCATED OBFUSCATED" vs "OBFUSCATED OBFUSCATED"
+trial_details %<>% mutate_at(vars(-("nct_id")), tolower)
+intervention_details %<>% mutate_at(vars(-("nct_id")), tolower)
+condition_details %<>% mutate_at(vars(-("nct_id")), tolower)
+reference_details %<>% mutate_at(vars(-("nct_id")), tolower)
+condition_details %<>% mutate_at(vars(-("nct_id")), tolower)
+outcome_details %<>% mutate_at(vars(-("nct_id")), tolower)
+```
+
+## Identifying PubMed entries associated with OBFUSCATED clinical trials using paclitaxel:
+
+First, need to filter for only the relevant NCT IDs
+```{r}
+cond_filt <- condition_details %>% 
+  filter(stringr::str_detect(name, 'OBFUSCATED OBFUSCATED')) 
+
+intv_filt <- intervention_details %>% 
+  filter(stringr::str_detect(name, 'paclitaxel'))
+
+in_both <- intersect(cond_filt$nct_id, intv_filt$nct_id)
+```
+
+There are OBFUSCATED clinical trials for OBFUSCATED using OBFUSCATED
+The references attached to these trials can be retrieved from `reference_details`
+```{r}
+citations <- reference_details %>% filter((nct_id %in% in_both))
+```
+
+There are references that contain PMIDs
+```{r}
+pmids <- citations %>% filter(!is.na(pmid)) %>% pull(pmid)
+```
+
+Unsurprisingly, clinical trial did not publish transcriptomic data or otherwise\n
+Results for the clinical trials are available, but clin trial data will be most useful for identifying OBFUSCATED / OBFUSCATED
+```{r}
+web_history <- entrez_post("pubmed", id=pmids)
+summaries <- entrez_summary(db = "pubmed", web_history = web_history)
+link <- entrez_link(dbfrom = "pubmed", web_history = web_history, db="sra") # does not link to biosample, bioproject, nucleotide, etc., either
+```
+
+OBFUSCATED have been excluded from the below plots because they are OBFUSCATED and highly prevalent in OBFUSCATED
+```{r fig.width=8, fig.height=10, echo=FALSE}
+trial_details$completion_date <- as.Date(trial_details$completion_date)
+
+filt <- trial_details %>% 
+  filter(!is.na(completion_date))
+
+date_hist <- 
+  ggplot(filt, aes(x = completion_date)) +
+  geom_histogram() +
+  theme_pubclean()
+
+date_hist
+
+OBFUSCATED_counts <- intervention_details %>% 
+  group_by(name) %>%
+  count() %>% 
+  arrange(-n) %>%
+  filter(stringr::str_detect(name, "OBFUSCATED", negate = T)) %>%
+  head(50)
+
+OBFUSCATED_count_plt <- 
+  ggplot(OBFUSCATED_counts, aes(x=reorder(name, -n), y=n)) +
+  geom_bar(stat="identity") + 
+  theme_pubclean() +
+  theme(axis.text.x = element_text(angle=90)) +
+  labs(x = "OBFUSCATED",
+       y = "Count",
+       title = "OBFUSCATED")
+
+OBFUSCATED_count_plt
+
+cond_counts <- condition_details %>% 
+  group_by(name) %>%
+  count() %>% 
+  arrange(-n) %>%
+  filter(stringr::str_detect(name, 'OBFUSCATED', negate = T)) %>%
+  head(50)
+
+cond_count_plt <- 
+  ggplot(cond_counts, aes(x=reorder(name,-n), y=n)) +
+  geom_bar(stat="identity") +
+  theme_pubclean() +
+  theme(axis.text.x = element_text(angle=90)) +
+  labs(x = "Condition",
+       y = "Count",
+       title = "Number of Clinical Trials by OBFUSCATED")
+
+cond_count_plt
+
+int_by_cond <- merge(intervention_details, condition_details, by = "nct_id")
+int_by_cond %<>% rename(OBFUSCATED = name.x, condition = name.y) %>%
+  group_by(condition, OBFUSCATED) %>% 
+  count() %>%
+  arrange(-n) %>%
+  filter(stringr::str_detect(condition,  'OBFUSCATED', negate = T)) %>%
+  filter(stringr::str_detect(OBFUSCATED, "OBFUSCATED", negate = T)) %>%
+  filter(condition %in% c("OBFUSCATED")) %>%
+  filter(n > 10) %>%
+  ungroup() %>%
+  arrange(condition, desc(n)) %>%
+  mutate(order = row_number())
+
+int_facet_cond <- 
+  ggplot(int_by_cond, aes(x=order, y=n)) +
+  geom_bar(stat="identity") +
+  theme_pubclean() +
+  theme(axis.text.x = element_text(angle=90)) +
+  labs(x = "OBFUSCATED",
+       y="Count",
+       title = "Distribution of OBFUSCATED by Condition") +
+  facet_wrap("condition", scales = "free") + 
+  scale_x_continuous(
+    breaks = int_by_cond$order,
+    labels = int_by_cond$OBFUSCATED,
+    expand = c(0,0)
+  )
+  
+int_facet_cond
+```
+
+If we're interested in OBFUSCATED, we can filter for common grouping words / symbols.\n
+This isn't a perfect method, since some trials use OBFUSCATED.\n
+`'with'` and `'and'` are the most likely to return actual OBFUSCATED.
+```{r}
+OBFUSCATED_ints <- intervention_details %>%
+  filter(stringr::str_detect(name, "with|,|and\\b"))
+
+multi_con <- merge(OBFUSCATED_ints, condition_details, by = "nct_id")
+multi_con %<>% rename(OBFUSCATED = name.x, condition = name.y)
+```
+
+```{r, include=FALSE}
+# This uses IDs obtained from the recognized term OBFUSCATED but doesn't seem to be very accurate
+nct_ids_md = c()
+for(i in list.files(path = "OBFUSCATED",full.names = T)){
+  f = read_xml(i)
+  nct_ids_md <- c(nct_ids_md, xml_text(xml_find_all(f, "//nct_id")))
+}
+write.table(nct_ids_md, file =  "OBFUSCATED", sep = ",",row.names = F)
+
+drv <- dbDriver('PostgreSQL') 
+con <- dbConnect(drv, dbname="aact",host="aact-db.ctti-clinicaltrials.org", port=5432, user="REDACTED", password="REDACTED")
+OBFUSCATED_td <- dbGetQuery(con, paste0("select distinct * from studies where nct_id in ('",paste(nct_ids_md, sep = "", collapse = "\',\'"),"')"))
+OBFUSCATED_id <- dbGetQuery(con, paste0("select distinct * from interventions where nct_id in ('",paste(nct_ids_md, sep = "", collapse = "\',\'"),"')"))
+OBFUSCATED_rd <- dbGetQuery(con, paste0("select distinct * from study_references where nct_id in ('",paste(nct_ids_md, sep = "", collapse = "\',\'"),"')"))
+OBFUSCATED_cd <- dbGetQuery(con, paste0("select distinct * from conditions where nct_id in ('",paste(nct_ids_md, sep = "", collapse = "\',\'"),"')"))
+OBFUSCATED_od <- dbGetQuery(con, paste0("select distinct * from outcomes where nct_id in ('",paste(nct_ids_md, sep = "", collapse = "\',\'"),"')"))
+OBFUSCATED_ad <- dbGetQuery(con, paste0("select distinct * from outcome_analyses where nct_id in ('",paste(nct_ids_md, sep = "", collapse = "\',\'"),"')"))
+
+dbDisconnect(con)
+
+# Prevent errors such as "OBFUSCATED OBFUSCATED" vs "OBFUSCATED OBFUSCATED"
+OBFUSCATED_td %<>% mutate_at(vars(-("nct_id")), tolower)
+OBFUSCATED_id %<>% mutate_at(vars(-("nct_id")), tolower)
+OBFUSCATED_cd %<>% mutate_at(vars(-("nct_id")), tolower)
+OBFUSCATED_rd %<>% mutate_at(vars(-("nct_id")), tolower)
+OBFUSCATED_cd %<>% mutate_at(vars(-("nct_id")), tolower)
+OBFUSCATED_ad %<>% mutate_at(vars(-("nct_id")), tolower)
+```
+
+If we want transcriptomic data, cell lines may be unavoidable.\n
+E.g. The OBFUSCATED Lab from OBFUSCATED recently published OBFUSCATED results on OBFUSCATED tested against OBFUSCATED
+```{r}
+OBF_sum <- entrez_summary(db = "bioproject", id = "OBFUSCATED")
+OBF_sum$project_description
+
+```
+
+Find all SRA IDs for the data from the project. \n
+These are most easily downloaded with external SRA-tools
+```{r}
+OBF_sra_link <- entrez_link(dbfrom = "bioproject", id="OBF", db="sra")
+sra_ids <- OBF_sra_link$links$bioproject_sra_all
+length(sra_ids)
+```
+
+## Shared OBFUSCATEDs 
+```{r}
+OBFUSCATED_OBFUSCATEDs <- c("OBFUSCATED")
+
+OBF_supp_23 <- readxl::read_excel("data/OBF.xlsx", sheet=1, skip=2)
+OBF_OBFUSCATEDs_23 <- OBF_supp_23 %>% pull(Name) %>% unique
+OBF_supp_95 <- readxl::read_excel("data/OBF.xlsx", sheet=2, skip=2)
+OBF_OBFUSCATEDs_95 <- OBF_supp_95 %>% pull(Name) %>% unique
+
+```
