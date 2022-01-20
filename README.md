@@ -7,6 +7,10 @@
 
 For a Java sample please see: https://github.com/thatRichman/JGraphGenome/
 
+JGraphGenome is a (very) early stage sandbox attempt at building a graph-based genome tool in Java. 
+Mostly for fun, under no serious development.
+
+
 For a Julia sample please see: https://github.com/thatRichman/BioServices.jl/blob/feature/bioDBnet/src/bioDBnet.jl
 
 or
